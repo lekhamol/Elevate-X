@@ -1,11 +1,11 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => {
     const saved = localStorage.getItem('elevator_user');
-    return saved ? JSON.parse(saved) : { name: 'Safety Admin', role: 'ENGINEER', email: 'admin@safetytwin.io' };
+    return saved ? JSON.parse(saved) : { name: 'Lead Safety Engineer', role: 'ENGINEER', email: 'engineer@safetytwin.io' };
   });
 
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
@@ -13,17 +13,23 @@ export const AuthProvider = ({ children }) => {
   });
 
   const login = (email, password, role = 'ENGINEER') => {
+    const formattedRole = role.toUpperCase();
+    let name = 'Lead Safety Engineer';
+    if (formattedRole === 'ADMIN') name = 'System Administrator';
+    if (formattedRole === 'OPERATOR') name = 'Building Operator';
+
     const userData = {
-      name: role === 'ADMIN' ? 'System Administrator' : (role === 'ENGINEER' ? 'Lead Safety Engineer' : 'Building Operator'),
+      name,
       email,
-      role,
+      role: formattedRole,
       loginTime: new Date().toISOString()
     };
+
     setUser(userData);
     setIsAuthenticated(true);
     localStorage.setItem('elevator_user', JSON.stringify(userData));
     localStorage.setItem('elevator_auth', 'true');
-    return true;
+    return formattedRole;
   };
 
   const logout = () => {

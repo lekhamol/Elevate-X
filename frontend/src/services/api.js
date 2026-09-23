@@ -7,61 +7,148 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 8000,
+  timeout: 5000,
 });
 
 export const elevatorApi = {
-  // Telemetry
-  getRecentTelemetry: (elevatorId = 'ELV-01', limit = 30) =>
-    api.get(`/telemetry/recent?elevatorId=${elevatorId}&limit=${limit}`),
-  
-  getHistoricalTelemetry: (elevatorId = 'ELV-01', start, end) => {
-    let url = `/telemetry/history?elevatorId=${elevatorId}`;
-    if (start) url += `&start=${start}`;
-    if (end) url += `&end=${end}`;
-    return api.get(url);
+  // 1. Recent Telemetry
+  getRecentTelemetry: async (elevatorId = 'ELV-01', limit = 30) => {
+    try {
+      const response = await api.get(`/telemetry/recent?elevatorId=${elevatorId}&limit=${limit}`);
+      return { success: true, data: response.data };
+    } catch (err) {
+      console.warn('API Warning [getRecentTelemetry]:', err.message);
+      return { success: false, data: [], error: err.message };
+    }
   },
 
-  postTelemetry: (payload) => api.post('/telemetry', payload),
+  // 2. Historical Telemetry
+  getTelemetryHistory: async (elevatorId = 'ELV-01', start = '', end = '') => {
+    try {
+      let url = `/telemetry/history?elevatorId=${elevatorId}`;
+      if (start) url += `&start=${start}`;
+      if (end) url += `&end=${end}`;
+      const response = await api.get(url);
+      return { success: true, data: response.data };
+    } catch (err) {
+      console.warn('API Warning [getTelemetryHistory]:', err.message);
+      return { success: false, data: [], error: err.message };
+    }
+  },
 
-  // Elevator State & Control
-  getElevatorState: (elevatorId = 'ELV-01') =>
-    api.get(`/elevator/state?elevatorId=${elevatorId}`),
-  
-  sendCommand: (action, targetFloor = null, elevatorId = 'ELV-01') =>
-    api.post('/elevator/command', { elevatorId, action, targetFloor }),
+  // 3. Telemetry Ingestion (intended for ESP32 / simulator)
+  postTelemetry: async (payload) => {
+    try {
+      const response = await api.post('/telemetry', payload);
+      return { success: true, data: response.data };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  },
 
-  // Safety Alerts
-  getAlerts: (elevatorId = 'ELV-01', unresolvedOnly = false) =>
-    api.get(`/alerts?elevatorId=${elevatorId}&unresolvedOnly=${unresolvedOnly}`),
-  
-  getAlertsSummary: () => api.get('/alerts/summary'),
+  // 4. Safety Alerts
+  getSafetyAlerts: async (elevatorId = 'ELV-01', unresolvedOnly = false) => {
+    try {
+      const response = await api.get(`/alerts?elevatorId=${elevatorId}&unresolvedOnly=${unresolvedOnly}`);
+      return { success: true, data: response.data };
+    } catch (err) {
+      console.warn('API Warning [getSafetyAlerts]:', err.message);
+      return { success: false, data: [], error: err.message };
+    }
+  },
 
-  acknowledgeAlert: (id, user = 'Safety Engineer') =>
-    api.post(`/alerts/${id}/acknowledge?user=${user}`),
+  // 5. Elevator State
+  getElevatorState: async (elevatorId = 'ELV-01') => {
+    try {
+      const response = await api.get(`/elevator/state?elevatorId=${elevatorId}`);
+      return { success: true, data: response.data };
+    } catch (err) {
+      console.warn('API Warning [getElevatorState]:', err.message);
+      return { success: false, data: null, error: err.message };
+    }
+  },
 
-  resolveAlert: (id, notes) =>
-    api.post(`/alerts/${id}/resolve`, { notes }),
+  // Additional Helper Endpoints
+  getAlertsSummary: async () => {
+    try {
+      const response = await api.get('/alerts/summary');
+      return { success: true, data: response.data };
+    } catch (err) {
+      return { success: false, data: { unresolvedCount: 0, criticalCount: 0 } };
+    }
+  },
 
-  // Rules
-  getRules: () => api.get('/rules'),
-  updateRule: (ruleData) => api.put('/rules', ruleData),
+  acknowledgeAlert: async (id, user = 'Safety Engineer') => {
+    try {
+      const response = await api.post(`/alerts/${id}/acknowledge?user=${user}`);
+      return { success: true, data: response.data };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  },
 
-  // Health
-  getHealthStatus: (deviceId = 'ESP32-ELEVATOR-TWIN') =>
-    api.get(`/health?deviceId=${deviceId}`),
+  resolveAlert: async (id, notes = 'Resolved after inspection') => {
+    try {
+      const response = await api.post(`/alerts/${id}/resolve`, { notes });
+      return { success: true, data: response.data };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  },
 
-  // Simulator
-  getSimulatorStatus: () => api.get('/simulator/status'),
-  toggleSimulator: (active) => api.post('/simulator/toggle', { active }),
-  injectFault: (faultType, active = true) =>
-    api.post('/simulator/inject-fault', { faultType, active }),
+  sendCommand: async (action, targetFloor = null, elevatorId = 'ELV-01') => {
+    try {
+      const response = await api.post('/elevator/command', { elevatorId, action, targetFloor });
+      return { success: true, data: response.data };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  },
 
-  // ML / Anomaly
-  getDataset: (elevatorId = 'ELV-01', limit = 100) =>
-    api.get(`/ml/telemetry-dataset?elevatorId=${elevatorId}&limit=${limit}`),
-  
-  pushPredictions: (predictions) => api.post('/api/ml/anomaly-predictions', predictions),
+  getRules: async () => {
+    try {
+      const response = await api.get('/rules');
+      return { success: true, data: response.data };
+    } catch (err) {
+      return { success: false, data: [] };
+    }
+  },
+
+  updateRule: async (ruleData) => {
+    try {
+      const response = await api.put('/rules', ruleData);
+      return { success: true, data: response.data };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  },
+
+  getSimulatorStatus: async () => {
+    try {
+      const response = await api.get('/simulator/status');
+      return { success: true, data: response.data };
+    } catch (err) {
+      return { success: false, data: { active: false } };
+    }
+  },
+
+  toggleSimulator: async (active) => {
+    try {
+      const response = await api.post('/simulator/toggle', { active });
+      return { success: true, data: response.data };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  },
+
+  injectFault: async (faultType, active = true) => {
+    try {
+      const response = await api.post('/simulator/inject-fault', { faultType, active });
+      return { success: true, data: response.data };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  }
 };
 
 export default api;

@@ -1,16 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import Navbar from './components/Navbar';
+import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import LiveDigitalTwin from './pages/LiveDigitalTwin';
-import SensorMonitoring from './pages/SensorMonitoring';
+import EngineerDashboard from './pages/EngineerDashboard';
+import OperatorDashboard from './pages/OperatorDashboard';
+import AdminDashboard from './pages/AdminDashboard';
+import DigitalTwin from './pages/DigitalTwin';
+import Telemetry from './pages/Telemetry';
 import Alerts from './pages/Alerts';
-import HistoricalData from './pages/HistoricalData';
-import SystemHealth from './pages/SystemHealth';
+import History from './pages/History';
+import Reports from './pages/Reports';
 import Settings from './pages/Settings';
+import SystemHealth from './pages/SystemHealth';
 import { elevatorApi } from './services/api';
 
 const ProtectedRoute = ({ children }) => {
@@ -21,19 +24,35 @@ const ProtectedRoute = ({ children }) => {
   return children;
 };
 
+// Default dashboard redirect based on role
+const RoleBasedRedirect = () => {
+  const { user } = useAuth();
+  if (user?.role === 'OPERATOR') return <Navigate to="/operator" replace />;
+  if (user?.role === 'ADMIN') return <Navigate to="/admin" replace />;
+  return <Navigate to="/engineer" replace />;
+};
+
 function MainLayout() {
   const [activeAlertsCount, setActiveAlertsCount] = useState(0);
   const [simulatorActive, setSimulatorActive] = useState(true);
+  const [isBackendOnline, setIsBackendOnline] = useState(true);
 
   const fetchStatus = async () => {
     try {
       const summaryRes = await elevatorApi.getAlertsSummary();
-      setActiveAlertsCount(summaryRes.data.unresolvedCount || 0);
+      if (summaryRes.success) {
+        setActiveAlertsCount(summaryRes.data.unresolvedCount || 0);
+        setIsBackendOnline(true);
+      } else {
+        setIsBackendOnline(false);
+      }
 
       const simRes = await elevatorApi.getSimulatorStatus();
-      setSimulatorActive(simRes.data.active);
+      if (simRes.success) {
+        setSimulatorActive(simRes.data.active);
+      }
     } catch (err) {
-      console.warn('Backend offline or starting up...');
+      setIsBackendOnline(false);
     }
   };
 
@@ -46,18 +65,15 @@ function MainLayout() {
   const handleToggleSimulator = async () => {
     const nextState = !simulatorActive;
     setSimulatorActive(nextState);
-    try {
-      await elevatorApi.toggleSimulator(nextState);
-    } catch (err) {
-      console.error(err);
-    }
+    await elevatorApi.toggleSimulator(nextState);
   };
 
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col text-slate-100 selection:bg-cyan-500 selection:text-slate-950">
-      <Navbar
+      <Header
+        isOnline={isBackendOnline}
+        elevatorId="ELV-01"
         activeAlertsCount={activeAlertsCount}
-        isOnline={true}
         simulatorActive={simulatorActive}
         onToggleSimulator={handleToggleSimulator}
       />
@@ -65,12 +81,18 @@ function MainLayout() {
         <Sidebar activeAlertsCount={activeAlertsCount} />
         <main className="flex-1 p-6 overflow-y-auto max-h-[calc(100vh-61px)]">
           <Routes>
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/digital-twin" element={<LiveDigitalTwin />} />
-            <Route path="/sensor-monitoring" element={<SensorMonitoring />} />
+            <Route path="/" element={<RoleBasedRedirect />} />
+            <Route path="/dashboard" element={<EngineerDashboard />} />
+            <Route path="/engineer" element={<EngineerDashboard />} />
+            <Route path="/operator" element={<OperatorDashboard />} />
+            <Route path="/admin" element={<AdminDashboard />} />
+            <Route path="/digital-twin" element={<DigitalTwin />} />
+            <Route path="/telemetry" element={<Telemetry />} />
+            <Route path="/sensor-monitoring" element={<Telemetry />} />
             <Route path="/alerts" element={<Alerts />} />
-            <Route path="/historical-data" element={<HistoricalData />} />
+            <Route path="/history" element={<History />} />
+            <Route path="/historical-data" element={<History />} />
+            <Route path="/reports" element={<Reports />} />
             <Route path="/system-health" element={<SystemHealth />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>
