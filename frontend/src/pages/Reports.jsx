@@ -6,9 +6,7 @@ import {
   Thermometer,
   Activity,
   Zap,
-  ShieldAlert,
-  BarChart2,
-  PieChart
+  HeartPulse
 } from 'lucide-react';
 
 export default function Reports() {
@@ -37,7 +35,6 @@ export default function Reports() {
     fetchReportData();
   }, []);
 
-  // Compute Statistics: Min, Max, Avg for Temp, Vib, Current
   const getStats = (key) => {
     if (telemetry.length === 0) return { min: 0, max: 0, avg: 0 };
     const values = telemetry.map((t) => t[key] || 0);
@@ -50,12 +47,14 @@ export default function Reports() {
   const tempStats = getStats('temperatureCelsius');
   const vibStats = getStats('vibrationMs2');
   const currentStats = getStats('motorCurrentAmps');
+  const healthStats = getStats('healthScore');
 
   const anomalyCount = telemetry.filter((t) => t.isAnomalyDetected).length;
 
   const exportReportCSV = () => {
     const summaryData = [
       ['Metric Category', 'Minimum', 'Maximum', 'Average'],
+      ['Elevator Health Score (0-100)', healthStats.min.toFixed(1), healthStats.max.toFixed(1), healthStats.avg.toFixed(1)],
       ['Temperature (°C)', tempStats.min.toFixed(2), tempStats.max.toFixed(2), tempStats.avg.toFixed(2)],
       ['Vibration (m/s²)', vibStats.min.toFixed(2), vibStats.max.toFixed(2), vibStats.avg.toFixed(2)],
       ['Motor Current (A)', currentStats.min.toFixed(2), currentStats.max.toFixed(2), currentStats.avg.toFixed(2)],
@@ -85,7 +84,7 @@ export default function Reports() {
             <span>Safety & Sensor Statistical Reports</span>
           </h1>
           <p className="text-xs text-slate-400 font-mono">
-            Summary metrics, statistical distributions, and compliance export
+            Summary metrics, health score distribution, and compliance dataset export
           </p>
         </div>
 
@@ -99,7 +98,15 @@ export default function Reports() {
       </div>
 
       {/* Summary KPI Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+        <div className="glass-card p-5 rounded-2xl border border-slate-800 space-y-1">
+          <span className="text-xs font-mono text-slate-400 uppercase">Average Health Score</span>
+          <p className="text-3xl font-extrabold font-mono text-emerald-400">
+            {healthStats.avg ? healthStats.avg.toFixed(1) : '100.0'}/100
+          </p>
+          <p className="text-[11px] text-slate-500 font-mono">0-100 Operating Condition</p>
+        </div>
+
         <div className="glass-card p-5 rounded-2xl border border-slate-800 space-y-1">
           <span className="text-xs font-mono text-slate-400 uppercase">Total Samples Logged</span>
           <p className="text-3xl font-extrabold font-mono text-cyan-400">{telemetry.length}</p>
@@ -123,6 +130,28 @@ export default function Reports() {
 
       {/* Sensor Statistics Grid (Min, Max, Avg) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Health Score Stats */}
+        <div className="glass-panel p-6 rounded-2xl border border-slate-800 space-y-4">
+          <div className="flex items-center space-x-2 border-b border-slate-800 pb-3">
+            <HeartPulse className="w-5 h-5 text-emerald-400" />
+            <h3 className="text-base font-bold text-slate-200 font-mono">Health Score (0-100)</h3>
+          </div>
+          <div className="space-y-3 font-mono text-xs">
+            <div className="flex justify-between items-center p-3 rounded-xl bg-slate-900">
+              <span className="text-slate-400">Minimum Score:</span>
+              <span className="text-rose-400 font-bold">{healthStats.min ? healthStats.min.toFixed(1) : '100.0'}</span>
+            </div>
+            <div className="flex justify-between items-center p-3 rounded-xl bg-slate-900">
+              <span className="text-slate-400">Maximum Score:</span>
+              <span className="text-emerald-400 font-bold">{healthStats.max ? healthStats.max.toFixed(1) : '100.0'}</span>
+            </div>
+            <div className="flex justify-between items-center p-3 rounded-xl bg-slate-900">
+              <span className="text-slate-400">Average Score:</span>
+              <span className="text-cyan-300 font-bold">{healthStats.avg ? healthStats.avg.toFixed(1) : '100.0'}</span>
+            </div>
+          </div>
+        </div>
+
         {/* Temperature Stats */}
         <div className="glass-panel p-6 rounded-2xl border border-slate-800 space-y-4">
           <div className="flex items-center space-x-2 border-b border-slate-800 pb-3">
@@ -163,28 +192,6 @@ export default function Reports() {
             <div className="flex justify-between items-center p-3 rounded-xl bg-slate-900">
               <span className="text-slate-400">Average:</span>
               <span className="text-slate-200 font-bold">{vibStats.avg.toFixed(2)} m/s²</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Motor Current Stats */}
-        <div className="glass-panel p-6 rounded-2xl border border-slate-800 space-y-4">
-          <div className="flex items-center space-x-2 border-b border-slate-800 pb-3">
-            <Zap className="w-5 h-5 text-purple-400" />
-            <h3 className="text-base font-bold text-slate-200 font-mono">Motor Current Statistics</h3>
-          </div>
-          <div className="space-y-3 font-mono text-xs">
-            <div className="flex justify-between items-center p-3 rounded-xl bg-slate-900">
-              <span className="text-slate-400">Minimum:</span>
-              <span className="text-cyan-400 font-bold">{currentStats.min.toFixed(2)} A</span>
-            </div>
-            <div className="flex justify-between items-center p-3 rounded-xl bg-slate-900">
-              <span className="text-slate-400">Maximum:</span>
-              <span className="text-purple-400 font-bold">{currentStats.max.toFixed(2)} A</span>
-            </div>
-            <div className="flex justify-between items-center p-3 rounded-xl bg-slate-900">
-              <span className="text-slate-400">Average:</span>
-              <span className="text-slate-200 font-bold">{currentStats.avg.toFixed(2)} A</span>
             </div>
           </div>
         </div>
