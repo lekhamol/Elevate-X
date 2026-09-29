@@ -16,6 +16,7 @@ import java.util.Map;
 public class AnomalyDetectionService {
 
     private final SensorReadingRepository sensorReadingRepository;
+    private final SafetyEngineService safetyEngineService;
 
     public List<SensorReading> getDatasetForTraining(String elevatorId, int limit) {
         String id = (elevatorId == null || elevatorId.isEmpty()) ? "ELV-01" : elevatorId;
@@ -33,6 +34,12 @@ public class AnomalyDetectionService {
                 sensorReadingRepository.findById(readingId).ifPresent(r -> {
                     r.setAnomalyScore(score);
                     r.setIsAnomalyDetected(isAnomaly);
+
+                    // Recalculate Health Score with new AI Anomaly score
+                    SafetyEngineService.HealthResult health = safetyEngineService.calculateHealthScore(r, null);
+                    r.setHealthScore(health.score);
+                    r.setHealthStatus(health.status);
+
                     sensorReadingRepository.save(r);
                 });
                 updated++;

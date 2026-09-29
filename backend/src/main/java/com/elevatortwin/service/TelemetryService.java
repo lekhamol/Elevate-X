@@ -38,15 +38,20 @@ public class TelemetryService {
                 .timestamp(LocalDateTime.now())
                 .build();
 
-        SensorReading savedReading = sensorReadingRepository.save(reading);
-
-        // Fetch & update elevator state
+        // Fetch elevator state for physics & interlock evaluation
         ElevatorState state = elevatorTwinService.getElevatorState(elevatorId);
         if (payload.getFloorPosition() != null) {
             state.setCurrentFloor(payload.getFloorPosition());
         }
 
-        // Run rule engine
+        // Calculate 0-100 Health Score & Classification (Normal, Warning, Attention, Critical)
+        SafetyEngineService.HealthResult health = safetyEngineService.calculateHealthScore(reading, state);
+        reading.setHealthScore(health.score);
+        reading.setHealthStatus(health.status);
+
+        SensorReading savedReading = sensorReadingRepository.save(reading);
+
+        // Run safety rules engine & alerts
         safetyEngineService.evaluateReading(savedReading, state);
         elevatorTwinService.saveState(state);
 

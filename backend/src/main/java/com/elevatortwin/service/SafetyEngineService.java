@@ -93,8 +93,106 @@ public class SafetyEngineService {
         }
     }
 
+    /**
+     * Calculates the 0-100 numerical Health Score and classifies the status:
+     * - 85 - 100 : Normal (Green)
+     * - 70 - 84  : Warning (Cyan)
+     * - 50 - 69  : Attention (Amber)
+     * - < 50     : Critical (Red)
+     */
+    public HealthResult calculateHealthScore(SensorReading reading, ElevatorState state) {
+        if (reading == null) {
+            return new HealthResult(100.0, "Normal");
+        }
+
+        double score = 100.0;
+
+        // 1. Temperature Deductions
+        double temp = reading.getTemperatureCelsius() != null ? reading.getTemperatureCelsius() : 25.0;
+        if (temp > 60.0) {
+            score -= 35.0 + Math.min(20.0, (temp - 60.0) * 2.0);
+        } else if (temp > 45.0) {
+            score -= 10.0 + ((temp - 45.0) / 15.0) * 15.0;
+        } else if (temp > 38.0) {
+            score -= ((temp - 38.0) / 7.0) * 5.0;
+        }
+
+        // 2. Vibration Deductions
+        double vib = reading.getVibrationMs2() != null ? reading.getVibrationMs2() : 0.5;
+        if (vib > 8.5) {
+            score -= 30.0 + Math.min(20.0, (vib - 8.5) * 4.0);
+        } else if (vib > 5.0) {
+            score -= 12.0 + ((vib - 5.0) / 3.5) * 15.0;
+        } else if (vib > 2.0) {
+            score -= ((vib - 2.0) / 3.0) * 6.0;
+        }
+
+        // 3. Motor Current Deductions
+        double current = reading.getMotorCurrentAmps() != null ? reading.getMotorCurrentAmps() : 4.0;
+        if (current > 12.5) {
+            score -= 25.0 + Math.min(15.0, (current - 12.5) * 3.0);
+        } else if (current > 8.0) {
+            score -= ((current - 8.0) / 4.5) * 10.0;
+        }
+
+        // 4. Door Motion Interlock Deduction
+        if (state != null && Boolean.FALSE.equals(reading.getDoorSensorState()) &&
+                ("MOVING_UP".equals(state.getDirection()) || "MOVING_DOWN".equals(state.getDirection()))) {
+            score -= 35.0;
+        }
+
+        // 5. ML Anomaly Score Deduction
+        double anomaly = reading.getAnomalyScore() != null ? reading.getAnomalyScore() : 0.0;
+        score -= (anomaly * 25.0);
+
+        if (Boolean.TRUE.equals(reading.getIsAnomalyDetected())) {
+            score -= 15.0;
+        }
+
+        // Clamp final score between 0.0 and 100.0
+        double finalScore = Math.max(0.0, Math.min(100.0, Math.round(score * 10.0) / 10.0));
+
+        // Classify Status: Normal, Warning, Attention, Critical
+        String status;
+        if (finalScore >= 85.0) {
+            status = "Normal";
+        } else if (finalScore >= 70.0) {
+            status = "Warning";
+        } else if (finalScore >= 50.0) {
+            status = "Attention";
+        } else {
+            status = "Critical";
+        }
+
+        return new HealthResult(finalScore, status);
+    }
+
+    public static class HealthResult {
+        public final double score;
+        public final String status;
+
+        public HealthResult(double score, String status) {
+            this.score = score;
+            this.status = status;
+        }
+    }
+
     public void evaluateReading(SensorReading reading, ElevatorState state) {
         if (reading == null) return;
+
+        // Calculate and set Health Score & Health Status
+        HealthResult health = calculateHealthScore(reading, state);
+        reading.setHealthScore(health.score);
+        reading.setHealthStatus(health.status);
+
+        // Generate Alert if Health Score drops below 50.0
+        if (health.score < 50.0) {
+            createAlert(reading.getElevatorId(), "HEALTH_SCORE_CRITICAL", "CRITICAL",
+                    "CRITICAL: Elevator Health Score Below 50!",
+                    String.format("Overall Health Score dropped to %.1f (%s status). Immediate inspection recommended.",
+                            health.score, health.status),
+                    health.score, 50.0);
+        }
 
         List<SafetyRule> activeRules = safetyRuleRepository.findAll();
 
@@ -153,9 +251,8 @@ public class SafetyEngineService {
                                 "CRITICAL: Unsafe Door Opening During Cabin Motion!",
                                 "Door sensor reads OPEN while elevator motor is actively moving! Safety interlock failure.",
                                 1.0, 0.0);
-                        // Trigger immediate emergency brake in elevator state
                         state.setEmergencyStop(true);
-                        state.setMotorStatus("MOTOR_STALLED");
+                        state.setMotorStatus("MOTOR_STALL");
                         state.setDirection("EMERGENCY_BRAKE");
                     }
                     break;
@@ -174,7 +271,6 @@ public class SafetyEngineService {
     }
 
     private void createAlert(String elevatorId, String alertType, String severity, String title, String message, Double value, Double limit) {
-        // Prevent duplicate spam alerts within recent seconds
         List<SafetyAlert> existing = safetyAlertRepository.findByElevatorIdAndResolvedFalseOrderByTimestampDesc(elevatorId);
         boolean duplicate = existing.stream().anyMatch(a -> a.getAlertType().equals(alertType) && a.getSeverity().equals(severity));
 
