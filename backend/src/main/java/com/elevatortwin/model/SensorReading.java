@@ -29,6 +29,10 @@ public class SensorReading {
     private Double anomalyScore; // Scikit-Learn predictions (0.0 to 1.0)
     private Boolean isAnomalyDetected;
 
+    // Real-Time 0-100 Health Score & Classification (Normal, Warning, Attention, Critical)
+    private Double healthScore;
+    private String healthStatus;
+
     private LocalDateTime timestamp;
 
     @PrePersist
