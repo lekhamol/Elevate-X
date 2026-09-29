@@ -10,14 +10,11 @@ import {
   Activity,
   Zap,
   Radio,
-  DoorClosed,
-  DoorOpen,
   ShieldCheck,
   AlertTriangle,
   RotateCcw,
   Sparkles,
-  ArrowUpRight,
-  ArrowDownRight
+  HeartPulse
 } from 'lucide-react';
 
 export default function EngineerDashboard() {
@@ -37,7 +34,6 @@ export default function EngineerDashboard() {
 
       if (telemetryRes.success && telemetryRes.data.length > 0) {
         setIsBackendConnected(true);
-        // Reverse array so oldest reading is left and newest is right
         setTelemetry(telemetryRes.data.slice().reverse());
       } else if (telemetryRes.error) {
         setIsBackendConnected(false);
@@ -55,13 +51,31 @@ export default function EngineerDashboard() {
 
   useEffect(() => {
     fetchDashboardData();
-    const interval = setInterval(fetchDashboardData, 2000); // 2-second live refresh
+    const interval = setInterval(fetchDashboardData, 2000);
     return () => clearInterval(interval);
   }, []);
 
   const latest = telemetry.length > 0 ? telemetry[telemetry.length - 1] : {};
   const isAnomaly = latest.isAnomalyDetected || alerts.length > 0;
   const anomalyScore = latest.anomalyScore || 0.0;
+
+  // Health Score (0-100) & Status (Normal, Warning, Attention, Critical)
+  let healthScore = latest.healthScore;
+  let healthStatus = latest.healthStatus;
+  if (healthScore === undefined || healthScore === null) {
+    let computed = 100.0;
+    if ((latest.temperatureCelsius || 0) > 60) computed -= 35;
+    else if ((latest.temperatureCelsius || 0) > 45) computed -= 15;
+    if ((latest.vibrationMs2 || 0) > 8.5) computed -= 30;
+    else if ((latest.vibrationMs2 || 0) > 5.0) computed -= 15;
+    if ((latest.motorCurrentAmps || 0) > 12.5) computed -= 25;
+    if (isAnomaly) computed -= 20;
+    healthScore = Math.max(0, Math.min(100, Math.round(computed)));
+    if (healthScore >= 85) healthStatus = 'Normal';
+    else if (healthScore >= 70) healthStatus = 'Warning';
+    else if (healthScore >= 50) healthStatus = 'Attention';
+    else healthStatus = 'Critical';
+  }
 
   const handleCallFloor = async (floor) => {
     await elevatorApi.sendCommand('CALL_FLOOR', floor);
@@ -80,14 +94,11 @@ export default function EngineerDashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Backend Offline Warning Banner */}
       {!isBackendConnected && (
         <div className="p-4 rounded-2xl bg-amber-950/80 border border-amber-600 text-amber-200 text-xs font-mono flex items-center justify-between shadow-xl">
           <div className="flex items-center space-x-2">
             <AlertTriangle className="w-5 h-5 text-amber-400 animate-pulse" />
-            <span>
-              Backend disconnected. Please make sure Spring Boot is running on port 8080.
-            </span>
+            <span>Backend disconnected. Please make sure Spring Boot is running on port 8080.</span>
           </div>
           <button
             onClick={fetchDashboardData}
@@ -101,9 +112,8 @@ export default function EngineerDashboard() {
       {/* Prominent Safety Alert Banner */}
       <SafetyAlert isAnomaly={isAnomaly} anomalyScore={anomalyScore} alerts={alerts} />
 
-      {/* SECTION A: Elevator Status Card & Overall Safety Condition */}
+      {/* SECTION A: Status Overview */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Elevator Status Overview */}
         <div className="lg:col-span-2 glass-panel p-6 rounded-2xl border border-slate-800 space-y-4">
           <div className="flex items-center justify-between border-b border-slate-800 pb-3">
             <div>
@@ -115,10 +125,9 @@ export default function EngineerDashboard() {
               </p>
             </div>
 
-            {/* SAFETY CONDITION BADGE */}
             <div className="flex items-center space-x-2">
               <span className="text-xs font-mono text-slate-400">Safety Status:</span>
-              {isAnomaly ? (
+              {isAnomaly || healthScore < 50 ? (
                 <span className="px-3 py-1 rounded-xl text-xs font-mono font-bold bg-rose-950 text-rose-300 border border-rose-600 animate-pulse">
                   SAFETY ALERT
                 </span>
@@ -145,9 +154,11 @@ export default function EngineerDashboard() {
             </div>
 
             <div className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800">
-              <p className="text-[11px] font-mono text-slate-400">Door Interlock</p>
-              <p className={`text-base font-bold font-mono mt-1 ${latest.doorSensorState ? 'text-emerald-400' : 'text-amber-400'}`}>
-                {latest.doorSensorState ? 'LOCKED' : 'OPEN'}
+              <p className="text-[11px] font-mono text-slate-400">Health Score</p>
+              <p className={`text-base font-bold font-mono mt-1 ${
+                healthScore >= 85 ? 'text-emerald-400' : healthScore >= 70 ? 'text-cyan-400' : healthScore >= 50 ? 'text-amber-400' : 'text-rose-400'
+              }`}>
+                {healthScore.toFixed(0)}/100 ({healthStatus})
               </p>
             </div>
 
@@ -160,7 +171,7 @@ export default function EngineerDashboard() {
           </div>
         </div>
 
-        {/* Quick Dispatch Console */}
+        {/* Dispatch Console */}
         <div className="glass-panel p-6 rounded-2xl border border-slate-800 flex flex-col justify-between space-y-4">
           <div>
             <h3 className="text-sm font-bold text-slate-200 font-mono">Cabin Dispatch & Override</h3>
@@ -205,13 +216,24 @@ export default function EngineerDashboard() {
         </div>
       </div>
 
-      {/* SECTION B: Detailed Sensor Cards Grid */}
+      {/* SECTION B: Sensor Cards Grid */}
       <div>
         <h3 className="text-sm font-bold text-slate-300 font-mono mb-3 uppercase tracking-wider">
           Real-Time Sensor Telemetry Metrics
         </h3>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          {/* Health Score Card */}
+          <SensorCard
+            title="Health Score"
+            value={`${healthScore.toFixed(0)}/100`}
+            unit=""
+            icon={HeartPulse}
+            status={healthStatus?.toUpperCase()}
+            statusColor={healthStatus?.toLowerCase()}
+            subtitle="Condition Indicator"
+          />
+
           {/* Temperature Sensor */}
           <SensorCard
             title="Cabin Temperature"
@@ -258,9 +280,8 @@ export default function EngineerDashboard() {
         </div>
       </div>
 
-      {/* SECTION C: Live Charts & Elevator Twin Preview */}
+      {/* SECTION C: Live Charts & Digital Twin */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Live Telemetry Chart */}
         <div className="lg:col-span-2 glass-panel p-6 rounded-2xl border border-slate-800 space-y-4">
           <div className="flex items-center justify-between">
             <div>
@@ -280,18 +301,10 @@ export default function EngineerDashboard() {
           <TelemetryChart data={telemetry} type="all" />
         </div>
 
-        {/* Live Elevator Twin Visualizer */}
         <div>
           <ElevatorTwin
-            elevatorId={latest.elevatorId || 'ELV-01'}
-            currentFloor={latest.floorHallSensor || 1}
-            doorStatus={latest.doorSensorState ? 'CLOSED' : 'OPEN'}
-            operationalMode={elevatorState?.operationalMode || 'NORMAL'}
-            temperatureCelsius={latest.temperatureCelsius || 28.5}
-            vibrationMs2={latest.vibrationMs2 || 0.8}
-            motorCurrentAmps={latest.motorCurrentAmps || 0.8}
-            isAnomalyDetected={isAnomaly}
-            onCallFloor={handleCallFloor}
+            telemetry={latest}
+            isConnected={isBackendConnected}
           />
         </div>
       </div>

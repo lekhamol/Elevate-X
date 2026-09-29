@@ -2,34 +2,40 @@ import React from 'react';
 
 export default function SensorCard({ title, value, unit, status, icon: Icon, statusColor = 'emerald', subtitle }) {
   const getBadgeClass = () => {
-    switch (statusColor) {
+    switch (statusColor?.toLowerCase()) {
       case 'rose':
       case 'danger':
+      case 'critical':
         return 'bg-rose-950/80 text-rose-300 border-rose-800';
       case 'amber':
       case 'warning':
+      case 'attention':
         return 'bg-amber-950/80 text-amber-300 border-amber-800';
       case 'cyan':
         return 'bg-cyan-950/80 text-cyan-300 border-cyan-800';
       case 'emerald':
       case 'safe':
+      case 'normal':
       default:
         return 'bg-emerald-950/80 text-emerald-300 border-emerald-800';
     }
   };
 
   const getValueColor = () => {
-    switch (statusColor) {
+    switch (statusColor?.toLowerCase()) {
       case 'rose':
       case 'danger':
+      case 'critical':
         return 'text-rose-400';
       case 'amber':
       case 'warning':
+      case 'attention':
         return 'text-amber-400';
       case 'cyan':
         return 'text-cyan-400';
       case 'emerald':
       case 'safe':
+      case 'normal':
       default:
         return 'text-emerald-400';
     }

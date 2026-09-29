@@ -1,35 +1,70 @@
 import React from 'react';
-import { Boxes, Zap, Activity, Thermometer, ShieldCheck, AlertTriangle, Sparkles, Radio } from 'lucide-react';
+import { Boxes, Zap, Activity, Thermometer, ShieldCheck, AlertTriangle, HeartPulse, Sparkles } from 'lucide-react';
 
 export default function ElevatorTwin({ telemetry = {}, isConnected = true }) {
   // Extract values from telemetry record with clean defaults
   const elevatorId = telemetry.elevatorId || 'ELV-01';
   const currentFloor = telemetry.floorHallSensor || 1;
-  
-  // Explicit User Directive: true -> DOORS OPEN, false -> DOORS CLOSED
   const isDoorsOpen = Boolean(telemetry.doorSensorState);
-  
+
   const temperatureCelsius = telemetry.temperatureCelsius !== undefined ? telemetry.temperatureCelsius : 28.8;
   const vibrationMs2 = telemetry.vibrationMs2 !== undefined ? telemetry.vibrationMs2 : 0.97;
   const motorCurrentAmps = telemetry.motorCurrentAmps !== undefined ? telemetry.motorCurrentAmps : 0.8;
   const anomalyScore = telemetry.anomalyScore !== undefined ? telemetry.anomalyScore : 0.02;
   const isAnomalyDetected = Boolean(telemetry.isAnomalyDetected);
 
+  // Health Score (0 - 100) & Classification (Normal, Warning, Attention, Critical)
+  // If backend hasn't provided healthScore yet, calculate dynamic fallback
+  let healthScore = telemetry.healthScore;
+  let healthStatus = telemetry.healthStatus;
+
+  if (healthScore === undefined || healthScore === null) {
+    let computed = 100.0;
+    if (temperatureCelsius > 60) computed -= 35;
+    else if (temperatureCelsius > 45) computed -= 15;
+    if (vibrationMs2 > 8.5) computed -= 30;
+    else if (vibrationMs2 > 5.0) computed -= 15;
+    if (motorCurrentAmps > 12.5) computed -= 25;
+    if (isAnomalyDetected) computed -= 20;
+    healthScore = Math.max(0, Math.min(100, Math.round(computed)));
+    
+    if (healthScore >= 85) healthStatus = 'Normal';
+    else if (healthScore >= 70) healthStatus = 'Warning';
+    else if (healthScore >= 50) healthStatus = 'Attention';
+    else healthStatus = 'Critical';
+  }
+
+  // Get color styles for Health Score
+  const getHealthBadgeStyle = () => {
+    switch (healthStatus?.toLowerCase()) {
+      case 'critical':
+        return { badge: 'bg-rose-950 text-rose-300 border-rose-700', bar: 'bg-rose-500', text: 'text-rose-400' };
+      case 'attention':
+        return { badge: 'bg-amber-950 text-amber-300 border-amber-700', bar: 'bg-amber-500', text: 'text-amber-400' };
+      case 'warning':
+        return { badge: 'bg-cyan-950 text-cyan-300 border-cyan-700', bar: 'bg-cyan-500', text: 'text-cyan-400' };
+      case 'normal':
+      default:
+        return { badge: 'bg-emerald-950 text-emerald-300 border-emerald-700', bar: 'bg-emerald-500', text: 'text-emerald-400' };
+    }
+  };
+
+  const healthStyle = getHealthBadgeStyle();
+
   // Map floor 1-5 to bottom position percentage:
-  // Floor 1 -> 5%, Floor 2 -> 25%, Floor 3 -> 45%, Floor 4 -> 65%, Floor 5 -> 85%
   const bottomPosition = (Math.max(1, Math.min(5, currentFloor)) - 1) * 20 + 5;
 
   return (
     <div className={`glass-panel p-6 rounded-2xl border transition-all duration-500 space-y-5 relative overflow-hidden ${
-      isAnomalyDetected
+      isAnomalyDetected || healthScore < 50
         ? 'border-rose-600/80 shadow-2xl shadow-rose-950/50 bg-slate-950/95 ring-2 ring-rose-500/30'
         : 'border-slate-800 shadow-xl bg-slate-950/90'
     }`}>
-      {/* Top Header & Safety Status */}
+      {/* Top Header & Health Score Badge */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
         <div className="flex items-center space-x-3">
           <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${
-            isAnomalyDetected
+            healthScore < 50
               ? 'bg-rose-950/80 border-rose-600 text-rose-400 animate-pulse'
               : 'bg-cyan-950/80 border-cyan-800 text-cyan-400'
           }`}>
@@ -39,30 +74,54 @@ export default function ElevatorTwin({ telemetry = {}, isConnected = true }) {
             <div className="flex items-center space-x-2">
               <h2 className="text-base font-bold text-slate-100 font-mono">Digital Twin • {elevatorId}</h2>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-cyan-300">
-                Live ESP32 Stream
+                Live Telemetry
               </span>
             </div>
             <p className="text-xs text-slate-400 font-mono">Real-Time Sensor Telemetry Representation</p>
           </div>
         </div>
 
-        {/* OVERALL SAFETY STATUS BADGE */}
-        <div className="flex items-center space-x-2">
-          {isAnomalyDetected ? (
-            <div className="px-3.5 py-1.5 rounded-xl bg-rose-950 border border-rose-600 text-rose-200 text-xs font-mono font-bold flex items-center space-x-2 shadow-lg shadow-rose-950/60 animate-pulse">
-              <AlertTriangle className="w-4 h-4 text-rose-400 animate-bounce" />
-              <span>SAFETY ALERT</span>
+        {/* HEALTH SCORE DISPLAY BADGE */}
+        <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800">
+            <HeartPulse className={`w-4 h-4 ${healthStyle.text}`} />
+            <div className="text-left font-mono">
+              <span className="text-[10px] text-slate-400 uppercase block leading-none">Health Score</span>
+              <span className={`text-sm font-extrabold ${healthStyle.text}`}>{healthScore.toFixed(0)} / 100</span>
             </div>
-          ) : (
-            <div className="px-3.5 py-1.5 rounded-xl bg-emerald-950/90 border border-emerald-700 text-emerald-300 text-xs font-mono font-bold flex items-center space-x-2 shadow-md">
-              <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              <span>SAFE / NORMAL</span>
-            </div>
-          )}
+          </div>
+
+          <div className={`px-3 py-1.5 rounded-xl border text-xs font-mono font-bold flex items-center space-x-1.5 ${healthStyle.badge}`}>
+            {isAnomalyDetected || healthScore < 50 ? (
+              <AlertTriangle className="w-3.5 h-3.5 animate-bounce" />
+            ) : (
+              <ShieldCheck className="w-3.5 h-3.5" />
+            )}
+            <span className="uppercase">{healthStatus}</span>
+          </div>
         </div>
       </div>
 
-      {/* Telemetry Key Metric Summary Cards */}
+      {/* Health Score Gauge Progress Bar */}
+      <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 space-y-1.5">
+        <div className="flex items-center justify-between text-xs font-mono">
+          <span className="text-slate-400 flex items-center space-x-1">
+            <HeartPulse className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Elevator Health Assessment</span>
+          </span>
+          <span className={`font-bold ${healthStyle.text}`}>
+            {healthScore.toFixed(1)}/100 • Condition: {healthStatus}
+          </span>
+        </div>
+        <div className="w-full h-2 rounded-full bg-slate-950 overflow-hidden border border-slate-800">
+          <div
+            className={`h-full transition-all duration-500 ${healthStyle.bar}`}
+            style={{ width: `${Math.max(5, Math.min(100, healthScore))}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Telemetry Metric Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono text-xs">
         <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 space-y-0.5">
           <span className="text-[10px] text-slate-400 uppercase">Elevator ID</span>
@@ -90,8 +149,8 @@ export default function ElevatorTwin({ telemetry = {}, isConnected = true }) {
       </div>
 
       {/* Visual Elevator Shaft & Cabin Canvas */}
-      <div className={`w-full h-[420px] relative rounded-2xl border bg-slate-950 overflow-hidden flex items-center justify-center transition-all duration-500 ${
-        isAnomalyDetected ? 'border-rose-600/70 shadow-inner shadow-rose-950/60' : 'border-slate-800'
+      <div className={`w-full h-[400px] relative rounded-2xl border bg-slate-950 overflow-hidden flex items-center justify-center transition-all duration-500 ${
+        isAnomalyDetected || healthScore < 50 ? 'border-rose-600/70 shadow-inner shadow-rose-950/60' : 'border-slate-800'
       }`}>
         {/* Steel Cable Pulley Lines */}
         <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-1 bg-gradient-to-b from-cyan-500/40 via-slate-700 to-slate-800 z-10" />
@@ -123,7 +182,7 @@ export default function ElevatorTwin({ telemetry = {}, isConnected = true }) {
         {/* Dynamic Animated Elevator Cabin Car */}
         <div
           className={`elevator-car absolute w-56 sm:w-72 h-32 rounded-2xl border-2 flex flex-col justify-between p-3.5 z-30 transition-all duration-700 ease-in-out ${
-            isAnomalyDetected
+            isAnomalyDetected || healthScore < 50
               ? 'bg-rose-950/95 border-rose-500 shadow-2xl shadow-rose-600/50 animate-pulse'
               : 'bg-slate-900/95 border-cyan-500/80 shadow-2xl shadow-cyan-950/50'
           }`}
@@ -140,21 +199,16 @@ export default function ElevatorTwin({ telemetry = {}, isConnected = true }) {
 
           {/* Sliding Doors Visualizer Animation */}
           <div className="relative w-full h-12 bg-slate-950 rounded-xl border border-slate-800 overflow-hidden flex items-center justify-between p-1 my-1">
-            {/* Left Sliding Door */}
             <div
               className={`h-full bg-slate-800 border-r border-cyan-500/40 rounded-l-lg transition-all duration-700 ease-in-out ${
                 isDoorsOpen ? 'w-2 bg-slate-900' : 'w-1/2 bg-slate-800'
               }`}
             />
-
-            {/* Interior Preview Label */}
             <div className={`text-[10px] font-mono font-bold z-10 transition-colors ${
               isDoorsOpen ? 'text-amber-300 animate-pulse' : 'text-emerald-400'
             }`}>
               {isDoorsOpen ? 'DOORS OPEN' : 'DOORS CLOSED'}
             </div>
-
-            {/* Right Sliding Door */}
             <div
               className={`h-full bg-slate-800 border-l border-cyan-500/40 rounded-r-lg transition-all duration-700 ease-in-out ${
                 isDoorsOpen ? 'w-2 bg-slate-900' : 'w-1/2 bg-slate-800'
@@ -176,7 +230,7 @@ export default function ElevatorTwin({ telemetry = {}, isConnected = true }) {
         </div>
       </div>
 
-      {/* Detailed Telemetry Footer Grid */}
+      {/* Telemetry Footer Summary Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 font-mono text-xs">
         <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
           <span className="text-slate-400 text-[10px]">Temperature</span>
@@ -187,13 +241,13 @@ export default function ElevatorTwin({ telemetry = {}, isConnected = true }) {
           <p className="text-amber-300 font-bold text-sm">{vibrationMs2.toFixed(2)} m/s²</p>
         </div>
         <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
-          <span className="text-slate-400 text-[10px]">Motor Current</span>
-          <p className="text-purple-300 font-bold text-sm">{motorCurrentAmps.toFixed(1)} A</p>
+          <span className="text-slate-400 text-[10px]">Health Score</span>
+          <p className={`font-bold text-sm ${healthStyle.text}`}>{healthScore.toFixed(0)} / 100</p>
         </div>
         <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
-          <span className="text-slate-400 text-[10px]">Overall Condition</span>
-          <p className={`font-bold text-xs ${isAnomalyDetected ? 'text-rose-400 font-extrabold' : 'text-emerald-400'}`}>
-            {isAnomalyDetected ? 'SAFETY ALERT' : 'SAFE / NORMAL'}
+          <span className="text-slate-400 text-[10px]">Condition</span>
+          <p className={`font-bold text-xs uppercase ${healthStyle.text}`}>
+            {healthStatus}
           </p>
         </div>
       </div>
