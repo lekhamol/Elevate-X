@@ -22,7 +22,7 @@ public class SimulatorService {
     private final ElevatorTwinService elevatorTwinService;
     private final SystemHealthMetricRepository systemHealthMetricRepository;
 
-    private boolean simulationActive = true;
+    private boolean simulationActive = false;
     private boolean injectOverTemp = false;
     private boolean injectHighVibration = false;
     private boolean injectUnsafeDoor = false;
