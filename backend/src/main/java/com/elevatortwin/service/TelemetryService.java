@@ -33,8 +33,8 @@ public class TelemetryService {
                 .motorCurrentAmps(payload.getMotorCurrent() != null ? payload.getMotorCurrent() : 4.2)
                 .floorHallSensor(payload.getFloorPosition() != null ? payload.getFloorPosition() : 1)
                 .rawRssi(payload.getRssi() != null ? payload.getRssi() : -62)
-                .anomalyScore(0.02)
-                .isAnomalyDetected(false)
+                .anomalyScore(payload.getAnomalyScore() != null ? payload.getAnomalyScore() : 0.02)
+                .isAnomalyDetected(payload.getIsAnomalyDetected() != null ? payload.getIsAnomalyDetected() : false)
                 .timestamp(LocalDateTime.now())
                 .build();
 
@@ -42,6 +42,27 @@ public class TelemetryService {
         ElevatorState state = elevatorTwinService.getElevatorState(elevatorId);
         if (payload.getFloorPosition() != null) {
             state.setCurrentFloor(payload.getFloorPosition());
+        }
+        if (payload.getDirection() != null && !payload.getDirection().isEmpty()) {
+            String dir = payload.getDirection().toUpperCase();
+            if (dir.contains("UP")) {
+                state.setDirection("MOVING_UP");
+                state.setMotorStatus("MOTOR_RUNNING_UP");
+                state.setCurrentSpeedMs(1.2);
+            } else if (dir.contains("DOWN")) {
+                state.setDirection("MOVING_DOWN");
+                state.setMotorStatus("MOTOR_RUNNING_DOWN");
+                state.setCurrentSpeedMs(1.2);
+            } else {
+                state.setDirection("IDLE");
+                state.setMotorStatus("MOTOR_IDLE");
+                state.setCurrentSpeedMs(0.0);
+            }
+        }
+        if (Boolean.FALSE.equals(payload.getDoorState())) {
+            state.setDoorStatus("DOOR_OPEN");
+        } else if (Boolean.TRUE.equals(payload.getDoorState())) {
+            state.setDoorStatus("DOOR_CLOSED");
         }
 
         // Calculate 0-100 Health Score & Classification (Normal, Warning, Attention, Critical)
